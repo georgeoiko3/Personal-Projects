@@ -1,0 +1,2 @@
+Make sure to save the dataset in the same folder as the main.py 
+In case you want to use the dataset in a different way then change the code lines after the comment line "# Load the dataset" accordingly.
