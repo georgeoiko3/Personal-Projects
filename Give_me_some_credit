@@ -1,0 +1,229 @@
+# Import necessary libraries and packages
+import pandas as pd
+import numpy as np
+import statsmodels.api as sm
+from sklearn.ensemble import IsolationForest
+from sklearn.model_selection import train_test_split
+from statsmodels.discrete.discrete_model import Probit
+from sklearn.metrics import accuracy_score, confusion_matrix, roc_curve, auc
+import itertools
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Load the dataset
+file_path = 'credit_scores_dataset.csv'
+data = pd.read_csv(file_path)
+
+# Create the new variable debtorID
+data['debtorID'] = range(1, len(data) + 1)
+
+# Remove missing values
+data_cleaned = data.dropna().copy()
+
+# Function to remove outliers using Isolation Forest
+def remove_outliers_isolation_forest(df, contamination=0.05):
+    iso_forest = IsolationForest(contamination=contamination, random_state=42)
+    outliers = iso_forest.fit_predict(df.drop(columns=['debtorID', 'SeriousDlqin2yrs']))
+    df = df[outliers != -1].copy()
+    return df
+
+# Remove outliers using Isolation Forest
+data_cleaned_final = remove_outliers_isolation_forest(data_cleaned)
+
+# Check for missing values
+print("Missing values in the dataset:")
+print(data_cleaned_final.isnull().sum())
+
+# Check for infinite values
+print("\nInfinite values in the dataset:")
+print(data_cleaned_final.isin([np.inf, -np.inf]).sum())
+
+# Remove missing and infinite values
+data_cleaned_final = data_cleaned_final.replace([np.inf, -np.inf], np.nan).dropna()
+
+# Set SeriousDlqin2yrs as the dependent variable
+dependent_variable = 'SeriousDlqin2yrs'
+
+# Perform linear regressions
+for column in data_cleaned_final.columns:
+    if column != dependent_variable:
+        # Extract the independent variable
+        X = data_cleaned_final[[column]]
+
+        # Add a constant term to the independent variable
+        X = sm.add_constant(X)
+
+        # Extract the dependent variable
+        y = data_cleaned_final[dependent_variable]
+
+        # Check for missing values in X and y before fitting the model
+        if X.isnull().any().any() or y.isnull().any():
+            continue  # Skip this iteration if there are missing values
+
+        # Fit the linear regression model
+        model = sm.OLS(y, X).fit()
+
+        # Print the regression results
+        print(f"\nVariable: {column}")
+        print(model.summary())
+
+# Drop the specified columns
+columns_to_drop = ["RevolvingUtilizationOfUnsecuredLines", "Unnamed: 0"]
+data_cleaned_dropped = data_cleaned.drop(columns=columns_to_drop, axis=1)
+
+# Print the first few rows of the updated DataFrame
+print(data_cleaned_dropped.head())
+
+# Extract all remaining variables as independent variables
+independent_variables = data_cleaned_dropped.drop(columns=[dependent_variable, 'debtorID'])
+
+# Add a constant term to the independent variables
+X = sm.add_constant(independent_variables)
+
+# Extract the dependent variable
+y = data_cleaned_dropped[dependent_variable]
+
+# Fit the linear regression model
+model = sm.OLS(y, X).fit()
+
+# Print the regression results
+print(model.summary())
+
+# Set the seed for reproducibility
+seed = 42
+
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(
+    data_cleaned_dropped.drop(columns=[dependent_variable, 'debtorID']),
+    data_cleaned_dropped[dependent_variable],
+    test_size=0.2,
+    random_state=seed
+)
+
+# Initialize the probit regression model
+probit_model = Probit(y_train, sm.add_constant(X_train))
+
+# Fit the model
+probit_results = probit_model.fit()
+
+# Make predictions on the test set
+y_pred_prob = probit_results.predict(sm.add_constant(X_test))
+y_pred = (y_pred_prob > 0.5).astype(int)
+
+# Assess the model performance
+accuracy = accuracy_score(y_test, y_pred)
+confusion = confusion_matrix(y_test, y_pred)
+
+# Print the results
+print("Probit Model Results:")
+print(probit_results.summary())
+print(f"\nAccuracy: {accuracy:.2f}")
+print(f"Confusion Matrix:\n{confusion}")
+
+# Extract coefficients from the linear regression model
+coefficients = model.params.drop(['const'])
+
+# Plot coefficients
+coefficients.plot(kind='bar', title='Linear Regression Coefficients')
+plt.xlabel('Variable')
+plt.ylabel('Coefficient Value')
+plt.show()
+
+# Extract coefficients from the probit model
+coefficients = probit_results.params.drop(['const'])
+
+# Plot coefficients
+coefficients.plot(kind='bar', title='Probit Model Coefficients')
+plt.xlabel('Variable')
+plt.ylabel('Coefficient Value')
+plt.show()
+
+# Calculate ROC curve
+fpr, tpr, _ = roc_curve(y_test, y_pred_prob)
+roc_auc = auc(fpr, tpr)
+
+# Plot ROC curve
+plt.figure()
+plt.plot(fpr, tpr, color='darkorange', lw=2, label='ROC curve (area = %0.2f)' % roc_auc)
+plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('Receiver Operating Characteristic (ROC) Curve')
+plt.legend(loc="lower right")
+plt.show()
+
+# Plot confusion matrix heatmap
+sns.heatmap(confusion, annot=True, fmt="d", cmap="Blues", cbar=False)
+plt.xlabel('Predicted')
+plt.ylabel('Actual')
+plt.title('Confusion Matrix')
+plt.show()
+
+# Define independent variables
+independent_variables_list = ['age', 'NumberOfTime30-59DaysPastDueNotWorse', 'MonthlyIncome',
+                               'NumberOfTimes90DaysLate', 'NumberOfTime60-89DaysPastDueNotWorse',
+                               'NumberOfDependents']
+
+# Generate all combinations of independent variables
+all_combinations = []
+for r in range(1, len(independent_variables_list) + 1):
+    combinations_r = list(itertools.combinations(independent_variables_list, r))
+    all_combinations.extend(combinations_r)
+
+# Initialize variables to keep track of the best model and its AUC
+best_auc = 0
+best_model = None
+best_combination = None
+best_confusion_matrix = None
+
+# Loop through each combination and fit probit model
+for combination in all_combinations:
+    # Convert combination to list
+    combination_list = list(combination)
+
+    # Extract independent variables
+    X_train_combination = X_train[combination_list]
+    X_test_combination = X_test[combination_list]
+
+    # Initialize the probit regression model
+    probit_model_combination = Probit(y_train, sm.add_constant(X_train_combination))
+
+    # Fit the model
+    probit_results_combination = probit_model_combination.fit()
+
+    # Make predictions on the test set
+    y_pred_prob_combination = probit_results_combination.predict(sm.add_constant(X_test_combination))
+    y_pred_combination = (y_pred_prob_combination > 0.5).astype(int)
+
+    # Calculate ROC curve
+    fpr_combination, tpr_combination, _ = roc_curve(y_test, y_pred_prob_combination)
+    roc_auc_combination = auc(fpr_combination, tpr_combination)
+
+    # Print AUC for each combination
+    print(f"\nAUC for Combination {combination_list}: {roc_auc_combination:.2f}")
+
+    # Update the best model if the current AUC is higher
+    if roc_auc_combination > best_auc:
+        best_auc = roc_auc_combination
+        best_model = probit_results_combination
+        best_combination = combination_list
+        best_confusion_matrix = confusion_matrix(y_test, y_pred_combination)
+
+# Print the best model's independent variables, AUC, and confusion matrix
+print(f"\nBest Model AUC: {best_auc:.2f}")
+print(f"Independent Variables in Best Model: {best_combination}")
+print("Confusion Matrix for Best Model:\n", best_confusion_matrix)
+
+# Plot ROC curve for the best model
+plt.figure()
+plt.plot(fpr, tpr, color='darkorange', lw=2, label='Overall ROC curve (area = %0.2f)' % roc_auc)
+plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('Overall Receiver Operating Characteristic (ROC) Curve')
+plt.legend(loc="lower right")
+plt.show()
