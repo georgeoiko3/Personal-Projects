@@ -1,0 +1,213 @@
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.naive_bayes import GaussianNB
+from scipy.stats import zscore
+from sklearn.metrics import roc_auc_score, roc_curve, confusion_matrix
+import statsmodels.api as sm
+
+# Load the dataset
+data = pd.read_csv('dataset.csv')
+
+# Convert categorical variables to numerical format
+data['Gender'] = data['Gender'].map({'Male': 0, 'Female': 1})
+data['Customer Type'] = data['Customer Type'].map({'Loyal Customer': 0, 'disloyal Customer': 1})
+data['Type of Travel'] = data['Type of Travel'].map({'Personal Travel': 0, 'Business travel': 1})
+data['Class'] = data['Class'].map({'Eco': 0, 'Eco Plus': 1, 'Business': 2})
+data['Satisfaction'] = data['Satisfaction'].map({'Neutral or Dissatisfied': 0, 'Satisfied': 1})
+
+# Check for missing values
+data.isnull().sum()
+
+# Check for duplicates
+data.duplicated().sum()
+
+# Replace missing values with zero after converting 'Arrival Delay' to numeric
+data.loc[:, 'Arrival Delay'] = data['Arrival Delay'].fillna(0)
+
+# Check for outliers and remove using z-score
+z_scores = np.abs(zscore(data.select_dtypes(include=['int64', 'float64'])))
+outliers = (z_scores > 3).all(axis=1)
+data = data[~outliers]
+
+# Drop the variable "Departure Delay"
+data.drop('Departure Delay', axis=1, inplace=True)
+
+# Random Forest classification
+# Convert any remaining categorical variables to numerical format
+data = pd.get_dummies(data, columns=['Gender', 'Customer Type', 'Type of Travel', 'Class'], drop_first=True)
+
+# Separate features (X) and target variable (y)
+X = data.drop('Satisfaction', axis=1)
+y = data['Satisfaction']
+
+# Split the dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Train a Random Forest Classifier
+rf_classifier = RandomForestClassifier(n_estimators=100, random_state=42)
+rf_classifier.fit(X_train, y_train)
+
+# Feature Importance
+feature_importance = rf_classifier.feature_importances_
+
+# Displaying feature importance
+feature_importance_df = pd.DataFrame({'Feature': X.columns, 'Importance': feature_importance})
+feature_importance_df = feature_importance_df.sort_values(by='Importance', ascending=False)
+
+# Plotting feature importance
+plt.figure(figsize=(10, 6))
+sns.barplot(x='Importance', y='Feature', data=feature_importance_df)
+plt.title('Feature Importance')
+plt.show()
+
+# Confusion Matrix for Random Forest Classifier
+rf_pred = rf_classifier.predict(X_test)
+rf_conf_matrix = confusion_matrix(y_test, rf_pred)
+
+# Display Confusion Matrix for Random Forest Classifier
+plt.figure(figsize=(8, 6))
+sns.heatmap(rf_conf_matrix, annot=True, fmt='d', cmap="Blues", xticklabels=['Predicted 0', 'Predicted 1'], yticklabels=['Actual 0', 'Actual 1'])
+plt.title('Confusion Matrix - Random Forest Classifier')
+plt.show()
+
+# ROC/AUC for Random Forest Classifier
+rf_probs_bootstrap = rf_classifier.predict_proba(X_test)[:, 1]
+roc_auc_rf = roc_auc_score(y_test, rf_probs_bootstrap)
+fpr_rf, tpr_rf, _ = roc_curve(y_test, rf_probs_bootstrap)
+
+# Display ROC/AUC curve for Random Forest Classifier
+plt.figure(figsize=(10, 8))
+plt.plot(fpr_rf, tpr_rf, label=f'Random Forest (AUC = {roc_auc_rf:.2f})', color='blue')
+plt.plot([0, 1], [0, 1], color='gray', linestyle='--')
+plt.title('ROC Curve for Random Forest Classifier')
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.legend()
+plt.show()
+
+# Probit Model
+# Select variables for probit regression
+selected_features_probit = ['Age', 'Flight Distance', 'Departure and Arrival Time Convenience',
+                            'Ease of Online Booking', 'Online Boarding', 'Gate Location',
+                            'On-board Service', 'Seat Comfort', 'Leg Room Service',
+                            'Cleanliness', 'In-flight Service', 'In-flight Wifi Service',
+                            'In-flight Entertainment', 'Baggage Handling', 'Check-in Service',
+                            'Food and Drink', 'Arrival Delay']
+
+# Create a new DataFrame with selected features and 'Satisfaction'
+probit_data = data[['Satisfaction'] + selected_features_probit]
+
+# Check for missing values in the new DataFrame
+print(probit_data.isnull().sum())
+
+# Check for duplicates
+print(probit_data.duplicated().sum())
+
+# Replace missing values with zero after converting to numeric
+probit_data['Age'] = pd.to_numeric(probit_data['Age'], errors='coerce')
+probit_data['Age'].fillna(0, inplace=True)
+
+# Split the dataset into features (X_probit) and target variable (y_probit)
+X_probit = probit_data[selected_features_probit]
+y_probit = probit_data['Satisfaction']
+
+# Split the dataset into training and testing sets for probit regression
+X_train_probit, X_test_probit, y_train_probit, y_test_probit = train_test_split(X_probit, y_probit, test_size=0.2, random_state=42)
+
+# Train a Probit Regression model using statsmodels
+X_train_probit = sm.add_constant(X_train_probit)  # add constant term to the features
+probit_model = sm.Probit(y_train_probit, X_train_probit)
+probit_result = probit_model.fit()
+
+# Print the summary of the probit model
+print(probit_result.summary())
+
+# Predict probabilities for probit regression model
+X_test_probit = sm.add_constant(X_test_probit)  # add constant term to the test features
+probit_probs = probit_result.predict(X_test_probit)
+
+# Calculate ROC/AUC for probit regression model
+roc_auc_probit = roc_auc_score(y_test_probit, probit_probs)
+fpr_probit, tpr_probit, _ = roc_curve(y_test_probit, probit_probs)
+
+# Display ROC/AUC curve for probit regression model
+plt.figure(figsize=(10, 8))
+plt.plot(fpr_probit, tpr_probit, label=f'Probit Regression (AUC = {roc_auc_probit:.2f})', color='purple')
+plt.plot([0, 1], [0, 1], color='gray', linestyle='--')
+plt.title('ROC Curve for Probit Regression Model')
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.legend()
+plt.show()
+
+# Confusion Matrix for Probit Regression
+probit_pred = probit_probs.round()  # convert probabilities to binary predictions
+probit_conf_matrix = confusion_matrix(y_test_probit, probit_pred)
+
+# Display Confusion Matrix for Probit Regression
+plt.figure(figsize=(8, 6))
+sns.heatmap(probit_conf_matrix, annot=True, fmt='d', cmap="Reds", xticklabels=['Predicted 0', 'Predicted 1'], yticklabels=['Actual 0', 'Actual 1'])
+plt.title('Confusion Matrix - Probit Regression')
+plt.show()
+
+# Naive Bayes
+selected_features_nb = ['Age', 'Flight Distance', 'Departure and Arrival Time Convenience',
+                        'Ease of Online Booking', 'Online Boarding', 'Gate Location',
+                        'On-board Service', 'Seat Comfort', 'Leg Room Service',
+                        'Cleanliness', 'In-flight Service', 'In-flight Wifi Service',
+                        'In-flight Entertainment', 'Baggage Handling']
+
+# Create a new DataFrame with selected features and 'Satisfaction'
+nb_data = data[['Satisfaction'] + selected_features_nb]
+
+# Check for missing values in the new DataFrame
+print(nb_data.isnull().sum())
+
+# Check for duplicates
+print(nb_data.duplicated().sum())
+
+# Replace missing values with zero after converting to numeric
+nb_data['Age'] = pd.to_numeric(nb_data['Age'], errors='coerce')
+nb_data['Age'].fillna(0, inplace=True)
+
+# Split the dataset into features (X_nb) and target variable (y_nb)
+X_nb = nb_data[selected_features_nb]
+y_nb = nb_data['Satisfaction']
+
+# Split the dataset into training and testing sets for Naive Bayes
+X_train_nb, X_test_nb, y_train_nb, y_test_nb = train_test_split(X_nb, y_nb, test_size=0.2, random_state=42)
+
+# Train a Naive Bayes model (GaussianNB)
+nb_model = GaussianNB()
+nb_model.fit(X_train_nb, y_train_nb)
+
+# Predict probabilities for Naive Bayes model
+nb_probs = nb_model.predict_proba(X_test_nb)[:, 1]
+
+# Calculate ROC/AUC for Naive Bayes model
+roc_auc_nb = roc_auc_score(y_test_nb, nb_probs)
+fpr_nb, tpr_nb, _ = roc_curve(y_test_nb, nb_probs)
+
+# Display ROC/AUC curve for Naive Bayes model
+plt.figure(figsize=(10, 8))
+plt.plot(fpr_nb, tpr_nb, label=f'Naive Bayes (AUC = {roc_auc_nb:.2f})', color='green')
+plt.plot([0, 1], [0, 1], color='gray', linestyle='--')
+plt.title('ROC Curve for Naive Bayes Model')
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.legend()
+plt.show()
+
+# Confusion Matrix for Naive Bayes
+nb_pred = nb_model.predict(X_test_nb)
+nb_conf_matrix = confusion_matrix(y_test_nb, nb_pred)
+
+# Display Confusion Matrix for Naive Bayes
+plt.figure(figsize=(8, 6))
+sns.heatmap(nb_conf_matrix, annot=True, fmt='d', cmap="Greens", xticklabels=['Predicted 0', 'Predicted 1'], yticklabels=['Actual 0', 'Actual 1'])
+plt.title('Confusion Matrix - Naive Bayes')
+plt.show()
