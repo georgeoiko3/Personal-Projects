@@ -1,0 +1,132 @@
+
+
+For the variable 'ExterQual' do the following: 
+		
+       Ex	=5
+       Gd	=4
+       TA	=3
+       Fa	=2
+       Po	=1
+		
+For the variable 'ExterCond' do the following: 
+		
+       Ex	=5
+       Gd	=4
+       TA	=3
+       Fa	=2
+       Po	=1
+		
+		
+For the variable 'BsmtQual' do the following: 
+
+       Ex	=5
+       Gd	=4
+       TA	=3
+       Fa	=2
+       Po	=1
+       NA	=0
+		
+For the variable 'BsmtCond' do the following: 
+
+       Ex	=5
+       Gd	=4
+       TA	=3
+       Fa	=2
+       Po	=1
+       NA	=0
+	
+For the variable 'BsmtExposure' do the following:
+
+       Gd	=4
+       Av	=3	
+       Mn	=2
+       No	=1
+       NA	=0
+	
+For the variable 'BsmtFinType1' do the following:
+
+       GLQ	=6
+       ALQ	=5
+       BLQ	=4	
+       Rec	=3
+       LwQ	=2
+       Unf	=1
+       NA	=0
+		
+
+For the variable 'BsmtFinType2' do the following:
+
+       GLQ	=6
+       ALQ	=5
+       BLQ	=4	
+       Rec	=3
+       LwQ	=2
+       Unf	=1
+       NA	=0
+
+For the variable 'HeatingQC' do the following:
+
+       Ex	=5
+       Gd	=4
+       TA	=3
+       Fa	=2
+       Po	=1
+		
+For the variable 'CentralAir' do the following:
+
+       N	=0
+       Y	=1
+
+For the variable 'KitchenQual' do the following:
+
+       Ex	=5
+       Gd	=4
+       TA	=3
+       Fa	=2
+       Po	=1
+       	
+
+For the variable 'FireplaceQu' do the following:
+
+       Ex	=5
+       Gd	=4
+       TA	=3
+       Fa	=2
+       Po	=1
+       NA	=0
+
+
+For the variable 'GarageQual' do the following:
+
+       Ex	=5
+       Gd	=4
+       TA	=3
+       Fa	=2
+       Po	=1
+       NA	=0
+		
+For the variable 'GarageCond' do the following:
+
+       Ex	=5
+       Gd	=4
+       TA	=3
+       Fa	=2
+       Po	=1
+       NA	=0
+
+For the variable 'PoolQC' do the following:
+		
+       Ex	=4
+       Gd	=3
+       TA	=2
+       Fa	=1
+       Po	=0
+		
+For the variable 'Fence' do the following:
+		
+       GdPrv	=4
+       MnPrv	=3
+       GdWo	=2
+       MnWw	=1
+       NA	=0
+	
