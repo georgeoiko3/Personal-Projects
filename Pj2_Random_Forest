@@ -1,0 +1,55 @@
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
+import matplotlib.pyplot as plt
+
+# Load the dataset
+data = pd.read_csv('train.csv')
+
+# Keep only categorical variables
+categorical_data = data.select_dtypes(include=['object', 'category'])
+
+# Load the variable "SalePrice" and add it to the final dataset
+sale_price = data[['SalePrice']]
+
+# Calculate the logarithm of "SalePrice"
+data['LogSalePrice'] = data['SalePrice'].apply(lambda x: 0 if x == 0 else np.log(x))
+
+# Convert categorical variables to dummy/indicator variables
+categorical_data_encoded = pd.get_dummies(categorical_data, drop_first=True)
+
+# Combine categorical encoded data with the target variable
+final_data = pd.concat([categorical_data_encoded, sale_price], axis=1)
+
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(categorical_data_encoded, data['LogSalePrice'], test_size=0.2, random_state=42)
+
+# Train a Random Forest Regressor
+rf_model = RandomForestRegressor(n_estimators=100, random_state=42)
+rf_model.fit(X_train, y_train)
+
+# Feature importances from the Random Forest model
+feature_importances = pd.Series(rf_model.feature_importances_, index=X_train.columns)
+sorted_feature_importances = feature_importances.sort_values(ascending=False)
+
+# Display the top N most important features
+top_features = sorted_feature_importances.head(2)
+print("\nTop 2 Features from Random Forests:")
+print(top_features)
+
+# Plot the feature importances
+plt.figure(figsize=(12, 8))
+top_features.plot(kind='bar')
+plt.title('Top 2 Feature Importances from Random Forest')
+plt.xlabel('Feature')
+plt.ylabel('Importance')
+plt.show()
+
+# Make predictions on the test set
+y_pred = rf_model.predict(X_test)
+
+# Evaluate the model performance
+mse = mean_squared_error(y_test, y_pred)
+print(f'\nMean Squared Error on Test Set: {mse}')
