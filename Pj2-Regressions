@@ -1,0 +1,144 @@
+import pandas as pd
+import numpy as np
+import statsmodels.api as sm
+from sklearn.impute import SimpleImputer
+from sklearn.metrics import mean_squared_error
+import seaborn as sns
+import matplotlib.pyplot as plt
+from statsmodels.stats.diagnostic import het_breuschpagan, het_arch
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+
+# Load the dataset
+data = pd.read_csv('train.csv')
+
+# Calculate the logarithm of "SalePrice"
+data['LogSalePrice'] = np.log1p(data['SalePrice'])
+
+# Calculate the logarithm of "LotArea"
+data['LogLotArea'] = np.log1p(data['LotArea'])
+
+# Define mapping dictionaries
+mappings = {
+    'ExterQual': {'Ex': 5, 'Gd': 4, 'TA': 3, 'Fa': 2, 'Po': 1},
+    'ExterCond': {'Ex': 5, 'Gd': 4, 'TA': 3, 'Fa': 2, 'Po': 1},
+    'BsmtQual': {'Ex': 5, 'Gd': 4, 'TA': 3, 'Fa': 2, 'Po': 1, 'NA': 0},
+    'BsmtCond': {'Ex': 5, 'Gd': 4, 'TA': 3, 'Fa': 2, 'Po': 1, 'NA': 0},
+    'BsmtExposure': {'Gd': 4, 'Av': 3, 'Mn': 2, 'No': 1, 'NA': 0},
+    'BsmtFinType1': {'GLQ': 6, 'ALQ': 5, 'BLQ': 4, 'Rec': 3, 'LwQ': 2, 'Unf': 1, 'NA': 0},
+    'BsmtFinType2': {'GLQ': 6, 'ALQ': 5, 'BLQ': 4, 'Rec': 3, 'LwQ': 2, 'Unf': 1, 'NA': 0},
+    'HeatingQC': {'Ex': 5, 'Gd': 4, 'TA': 3, 'Fa': 2, 'Po': 1},
+    'CentralAir': {'N': 0, 'Y': 1},
+    'KitchenQual': {'Ex': 5, 'Gd': 4, 'TA': 3, 'Fa': 2, 'Po': 1},
+    'FireplaceQu': {'Ex': 5, 'Gd': 4, 'TA': 3, 'Fa': 2, 'Po': 1, 'NA': 0},
+    'GarageQual': {'Ex': 5, 'Gd': 4, 'TA': 3, 'Fa': 2, 'Po': 1, 'NA': 0},
+    'GarageCond': {'Ex': 5, 'Gd': 4, 'TA': 3, 'Fa': 2, 'Po': 1, 'NA': 0},
+    'PoolQC': {'Ex': 4, 'Gd': 3, 'TA': 2, 'Fa': 1, 'Po': 0},
+    'Fence': {'GdPrv': 4, 'MnPrv': 3, 'GdWo': 2, 'MnWw': 1, 'NA': 0}
+}
+
+# Apply transformations
+for column, mapping in mappings.items():
+    data[column] = data[column].map(mapping)
+
+# Keep only numeric variables
+numeric_data = data.select_dtypes(include='number')
+
+# Drop specified variables
+variables_to_drop = ['1stFlrSF', '2ndFlrSF', '3SsnPorch', 'BsmtCond', 'BsmtHalfBath', 'BsmtQual',
+                     'BsmtUnfSF', 'ExterCond', 'FireplaceQu', 'GarageArea', 'GarageCond',
+                     'GarageQual', 'Id', 'KitchenAbvGr', 'KitchenQual', 'LotFrontage',
+                     'LowQualFinSF', 'MSSubClass', 'MiscVal', 'MoSold', 'OpenPorchSF', 'MasVnrArea', 'BsmtFinSF1',
+                     'BedroomAbvGr', 'PoolQC', 'Fence', 'BsmtFinType2', 'BsmtFinSF2', 'GarageYrBlt',
+                     'TotalBsmtSF', 'FullBath', 'TotRmsAbvGrd', 'EnclosedPorch', 'PoolArea', 'YrSold', 'HalfBath', 'YearRemodAdd']
+
+numeric_data = numeric_data.drop(variables_to_drop, axis=1)
+
+# Separate features (X) and target variable (y)
+X = numeric_data.drop(['SalePrice', 'LogSalePrice', 'LotArea'], axis=1)
+y = data['LogSalePrice']
+
+# Replace missing values with the mean
+imputer = SimpleImputer(strategy='mean')
+X = pd.DataFrame(imputer.fit_transform(X), columns=X.columns)
+
+# Add a constant term to the features matrix for the intercept
+X = sm.add_constant(X)
+
+# Fit the OLS regression model
+model_ols = sm.OLS(y, X).fit()
+
+# Calculate and print RMSE
+y_pred_ols = model_ols.predict(X)
+rmse_ols = np.sqrt(mean_squared_error(y, y_pred_ols))
+print(f'RMSE for OLS Model: {rmse_ols}')
+
+# Print regression results
+print("\nRegression Analysis:")
+print(model_ols.summary())
+
+# Perform correlation analysis
+correlation_matrix = numeric_data.corr()
+
+# Test for Autocorrelation (Lagrange Multiplier Test)
+residuals_ols = model_ols.resid
+lm_test_stat, lm_p_value, _, _ = het_arch(residuals_ols)
+print(f"\nLagrange Multiplier Test for Autocorrelation (ARCH):")
+print(f"Test Statistic: {lm_test_stat}")
+print(f"P-Value: {lm_p_value}")
+
+# Test for Heteroskedasticity (Breusch-Pagan Test)
+bp_test_stat, bp_p_value, _, _ = het_breuschpagan(residuals_ols, X)
+print(f"\nBreusch-Pagan Test for Heteroskedasticity:")
+print(f"Test Statistic: {bp_test_stat}")
+print(f"P-Value: {bp_p_value}")
+
+# Test for Multicollinearity (Variance Inflation Factor - VIF)
+vif_data = X.drop('const', axis=1)  # Exclude the constant term
+vif_values = [variance_inflation_factor(vif_data.values, i) for i in range(vif_data.shape[1])]
+vif_results = pd.DataFrame({'Variable': vif_data.columns, 'VIF': vif_values})
+print("\nVariance Inflation Factor (VIF):")
+print(vif_results)
+
+# Weighted Least Squares (WLS) Regression
+weights = 1 / (X['OverallQual']**2)  # Use 'OverallQual' as an example, replace with the appropriate variable
+model_wls = sm.WLS(y, X, weights=weights).fit()
+
+# Calculate and print RMSE
+y_pred_wls = model_wls.predict(X)
+rmse_wls = np.sqrt(mean_squared_error(y, y_pred_wls))
+print(f'RMSE for WLS Model: {rmse_wls}')
+
+print("\nWeighted Least Squares (WLS) Regression Analysis:")
+print(model_wls.summary())
+
+# Heteroskedasticity-Robust Standard Errors Regression
+model_hc = sm.OLS(y, X).fit(cov_type='HC3')
+
+# Calculate and print RMSE
+y_pred_hc = model_hc.predict(X)
+rmse_hc = np.sqrt(mean_squared_error(y, y_pred_hc))
+print(f'RMSE for HC Model: {rmse_hc}')
+
+print("\nHeteroskedasticity-Robust Standard Errors Regression Analysis:")
+print(model_hc.summary())
+
+# Create a heatmap
+plt.figure(figsize=(12, 10))
+sns.heatmap(correlation_matrix, cmap='coolwarm', annot=True, fmt=".2f", linewidths=.5)
+plt.title('Correlation Matrix Heatmap')
+plt.show()
+
+# Create a DataFrame for the regression results
+regression_results = pd.DataFrame({
+    'variables': X.columns,
+    'OLS': model_ols.params.values,
+    'OLS p-values': model_ols.pvalues.values,
+    'WLS': model_wls.params.values,
+    'WLS p-values': model_wls.pvalues.values,
+    'HRSE': model_hc.params.values,
+    'HRSE p-values': model_hc.pvalues.values
+})
+
+# Export the dataset as a CSV file
+regression_results.to_csv('regression_results.csv', index=False)
+print("Regression results exported to 'regression_results.csv'")
